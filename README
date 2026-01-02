@@ -1,0 +1,3 @@
+Estas anotações são resultado do trabalho de desenvolvimento de um decoder RTMP de baixo custo, zero interação do usuário e suporte para vídetempo de reprodução na passagem entre eles.os em HD para um uso onde streamming e link de satélite eram mutuamente redundantes, sem percepção de mudança de qualidade ou 
+
+Há umn segundo arquivo com anotações sobre testes de desempenho, overlay de mensagens, comando remoto via dtmf (comandos em um canal de audio para comando remoto em locais sem acesso externo por conta da rede local) e detecção de imagem em tela preta (sinal sem vídeo sendo gerado na fonte).
