@@ -1,0 +1,872 @@
+
+- Instalar o SO (Debian 9 Stretch ou Raspbian equivalente)
+.criar um arquivo vazio chamado 'ssh' na partição boot (no windows)
+root / 2288
+decoder / decoder  ( <- serial do eqpto)
+pi / 2288
+
+--------
+configurações não testadas (mas aparentemente mais modernas):
+
+- https://www.dobitaobyte.com.br/raspberry-pi-2-dicas-duvidas-e-erros-comuns/
+
+
+- Reset raspbian:
+connect GPIO3 with GND and change the config.txt file using this command. After a reboot, it should work.:
+
+sudo nano /boot/config.txt
+and add the following line to the file:
+
+dtoverlay=gpio-shutdown,gpio_pin=3,active_low=1,gpio_pull=up
+
+- Boot sem mensagens no Debian 11
+The following written all on one line can be added to /boot/cmdline.txt
+consoleblank=1 logo.nologo quiet loglevel=0 plymouth.enable=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles splash fastboot noatime nodiratime noram
+--------
+
+
+##- Para Permitir que o usuário comum criado na instalação possa fazer sudo
+##adduser decoder
+##usermod -a -G sudo decoder
+##reboot
+
+$> raspi-config (como root)
+Network:
+  - hostname = decoder
+  - Wi-Fi = configurar
+Boot Options
+  - Desktop/Cli: Console Autologin como pi
+  - Wait for Network: No
+  - Splash Screen (se instalado): No
+Interfacing Options
+  - SSH: On
+Advanced Options
+  - Expand Filesystem
+  - Audio: HDMI  
+Performance Options
+  - GPU Memory: 256MB
+
+- Para configurar a rede sem fio no SD:
+criar /boot/wpa_supplicant.conf  (o sistema copiará as configurações para /etc/wpa_supplicant/wpa_supplicant.conf)
+----------------------------------------
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=«your_ISO-3166-1_two-letter_country_code»
+
+network={
+    ssid="ssid"
+    psk="senha"
+    key_mgmt=WPA-PSK
+}
+----------------------------------------
+
+- Habilitar SSH como root
+nano /etc/ssh/sshd_config (e mudar a linha "PermitRootLogin without-password" para "PermitRootLogin yes")
+/etc/init.d/ssh restart (Debian 8)
+systemctl enable ssh (Debian 9 - ativa serviço no boot)
+
+
+- Autologin como root Jessie (Debian 8)
+Editar o arquivo /etc/systemd/system/autologin\@service e mudar a linha:
+ExecStart=-/sbin/agetty --skip-login --noclear --noissue --login-options "-f pi" %I $TERM
+para
+ExecStart=-/sbin/agetty --skip-login --noclear --noissue --login-options "-f root" %I $TERM
+
+- Autologin como root no Buster (Debian 10)
+Editar /etc/systemd/system/getty@tty1.service.d/autologin.conf e trocar 'pi' por 'root'
+
+- Editar /etc/default/keyboard e deixar como:
+XKBMODEL="abnt2"
+XKBLAYOUT="br"
+XKBVARIANT=""
+XKBOPTIONS="lv:3ralt_switch,compose:rwin"
+BACKSPACE="guess"
+
+- Reiniciar o serviço do teclado: 
+/etc/init.d/kbd restart (no jessie)
+service keyboard-setup restart  (no stretch)
+reboot (no buster)
+
+- Acertar timezone e cliente ntp:
+dpkg-reconfigure tzdata
+
+(se quiser trocar pelo ntp, mas não precisa)
+apt-get install ntpq
+nano /etc/ntp.conf  (comentar as entradas do pool e acrwescentar em servers:)
+server a.ntp.br iburst
+server b.ntp.br iburst
+
+
+- Permitir que deb-multimedia seja confiável:
+apt update; apt-get install deb-multimedia-keyring
+ou se o pacote não for encontrado:
+wget http://www.deb-multimedia.org/pool/main/d/deb-multimedia-keyring/deb-multimedia-keyring_2016.8.1_all.deb; dpkg -i deb-multimedia-keyring_2016.8.1_all.deb
+
+
+- Editar /etc/apt/sources.list e deixar como (stretch):
+# 
+# /etc/apt/sources.list
+#
+
+# Original
+#deb http://raspbian.raspberrypi.org/raspbian/ stretch main contrib non-free rpi
+# Uncomment line below then 'apt-get update' to enable 'apt-get source'
+#deb-src http://raspbian.raspberrypi.org/raspbian/ stretch main contrib non-free rpi
+
+# Descomente no caso do mirror indicado pela Raspbian estar fora do ar ou so responder a https
+deb http://raspbian.c3sl.ufpr.br/raspbian/ stretch main contrib non-free rpi
+
+# Para instalar o ffmpeg e a libzmq no Debian
+deb http://www.deb-multimedia.org stretch main non-free
+deb-src http://www.deb-multimedia.org stretch main non-free
+------------------------------------------------------------------
+
+- Editar /etc/apt/sources.list e deixar como (buster):
+# 
+# /etc/apt/sources.list
+#
+
+# Original
+deb http://raspbian.raspberrypi.org/raspbian/ buster main contrib non-free rpi
+# Uncomment line below then 'apt-get update' to enable 'apt-get source'
+#deb-src http://raspbian.raspberrypi.org/raspbian/ buster main contrib non-free rpi
+
+# Descomente no caso do mirror indicado pela Raspbian estar fora do ar ou so responder a https
+# deb http://raspbian.c3sl.ufpr.br/raspbian/ buster main contrib non-free rpi
+
+# Para instalar o ffmpeg e a libzmq no Debian
+deb http://www.deb-multimedia.org buster main non-free
+deb-src http://www.deb-multimedia.org buster main non-free
+------------------------------------------------------------------
+
+- Deixar os pacotes em dia
+apt-get upgrade
+
+- Se necessário instalar o pacote net-tools (arp, ifconfig, netstat, rarp, nameif, route, etc.)
+apt-get install net-tools
+
+- Reboot às 08:50 de segunda e quinta (se isso for aceitável)
+$> crontab -e
+50 08 * * 1,4 /sbin/reboot
+ 
+- Montar um RAMDisk para armazenar o log do ffmpeg (usado apenas pelo painel)
+e passar /tmp e var/log para a memoria
+http://fernandolira.com/posts/197/dica-criando-um-ramdisk-linux
+mkdir /mnt/ramdisk
+nano /etc/fstab
+tmpfs /mnt/ramdisk tmpfs   nodev,nosuid,noexec,nodiratime,size=128M   0 0
+tmpfs /tmp tmpfs defaults,noatime,nosuid 0 0
+tmpfs /var/log tmpfs defaults,noatime,nosuid,size=16M 0 0
+ 
+  
+- Para acompanhar a temperatura:
+apt-get install lm-sensors 
+ou 
+cpu=$(</sys/class/thermal/thermal_zone0/temp); echo "CPU: "$((cpu/1000))" C"; echo "GPU: "$(vcgencmd measure_temp | sed 's/temp=//')
+ou apenas GPU:
+vcgencmd measure_temp | grep  -o -E '[[:digit:]].*'
+ou
+watch 'echo $(vcgencmd measure_clock arm | cut -c 15-18 | sed s/000/00/) MHz"  "$(vcgencmd measure_temp)'
+
+
+- Para stressar a máquina e ver as temperaturas
+apt-get install stress 
+sensors-detect
+service kmod start (ou /etc/init.d/kmod start)
+  watch -n 1 sensors
+    (abrir outro ssh)  
+  top  (t e 1)
+    (abrir outro ssh)
+  stress --cpu 6 --io 2 --vm 2 --vm-bytes 128M --timeout 3000s --verbose
+  
+
+- Para desativar o blank no LXDE do Debian Stretch adicionar em ~/.config/lxsession/LXDE/autostart (ou /etc/xdg/lxsession/LXDE-pi/autostart se o usuário não tiver sua configuração):
+@xset s noblank
+@xset s off
+@xset -dpms
+(possivelmente também desinstalar o xscreensaver)
+
+- Instalar ferramentas
+apt-get install git screen build-essential ifstat gawk libav-tools omxplayer (yasm também ?)
+
+
+
+- Compilar o FFPMEG 3.4 com suporte a NDI
+(https://forums.vmix.com/default.aspx?g=posts&m=46384_
+cd /root
+git clone git://source.ffmpeg.org/ffmpeg.git (git oficial)
+
+. Bibliotecas
+apt-get install libmp3lame-dev libvorbis-dev libtheora-dev  libspeex-dev  pkg-config libfaac-dev libopenjp2-7-dev libx264-dev libx265-dev libzmq3-dev libsdl1.2-dev libsdl2-dev libavdevice-dev libfdk-aac-dev libtool libavfilter-dev libavdevice-dev libavahi-common3 libavahi-client-dev avahi-daemon libfreetype6-dev libzvbi-dev libomxil-bellagio-dev
+
+.NDI SDK
+Baixar o SDK em www.newtek.com (recebe por email - InstallNDISDK_v3_Linux.sh)
+chmod 774 /root/InstallNDISDK_v3_Linux.sh
+/root/InstallNDISDK_v3_Linux.sh
+cp -r "/root/NDI SDK for Linux/lib/arm-linux-gnueabihf" /usr/lib  (se for usar x86 o diretorio de origem muda!)
+mkdir /root/ffmpeg/ndi
+cp -r "/root/NDI SDK for Linux/lib" /root/ffmpeg/ndi
+cp -r "/root/NDI SDK for Linux/include" /root/ffmpeg/ndi
+
+.FFMPEG
+cd /root/ffmpeg
+./configure --arch=armel --target-os=linux --enable-gpl --enable-postproc --enable-swscale --enable-avfilter --enable-libmp3lame --enable-libvorbis --enable-libtheora --enable-libx264 --enable-libspeex --enable-shared --enable-pthreads --enable-libopenjpeg --enable-nonfree --enable-ffplay --enable-libzmq --enable-libfreetype --enable-libfdk-aac --enable-mmal --enable-omx --enable-omx-rpi --enable-libzvbi --enable-libndi_newtek --extra-cflags="-I/root/ffmpeg/ndi/include/" --extra-ldflags="-L/root/ffmpeg/ndi/include/"
+
+make -j4   (se o make der erros de arquivo truncado, corrigir as dependências, apagar todo o diretório e recomeçar. Se der erro de não achar libraries, usar ld -(nome da lib) --verbose)
+make install
+make tools/zmqsend
+cp ./tools/zmqsend /usr/local/bin/ 
+make clean
+
+(se der erro na execução sobre biblioteca não encontrada, procurar ela, incluir o path no config do ld e reler a configuração:)
+  find / -name libavdevice.so.58
+  nano /etc/ld.so.conf
+  ldconfig
+
+
+** para saber a resolução atual da Raspi
+(X) fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/x([0-9]+)//g'
+(Y) fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/^([0-9]+)x//g'
+
+** Para rodar um script após o login no shell, criar o arquivo ~/.bash_login e colocar o script dentro
+(PARA REINICIAR A CAPTURA DO STREAM PELO OMXPLAYER USAR A TECLA 'Q')
+
+** Para rodar um comando numa screen já aberta:
+screen -S myScreen -X eval 'stuff "save-all\015"'
+
+
+
+
+- Para inicializar o Decoder (/root/.bash_login)
+---------------------------------------------------
+#!/bin/bash
+#/root/.bash_login
+
+alias ls='ls --color=auto'
+
+if [ $(who | grep -c 'root') = '1' ]; then
+
+  # Muda letras para preto
+  clear
+  setterm --foreground black
+
+  # Corrige \r no config se editado pela web
+  sed -i 's/\r/ /g' /var/www/html/videocall.conf
+
+  # Carrega módulos
+  /root/botoes_mouse.sh & > /dev/null 2>&1
+  /root/painel_decoder_lcd.sh & > /dev/null 2>&1
+  /root/recebe_stream.sh & > /dev/null 2>&1
+
+fi
+
+---------------------------------------------------
+
+
+- Para Receber o Stream no Decoder (Raspberry)
+---------------------------------------------------
+#!/bin/bash
+# /root/recebe_stream.sh
+
+# Muda letras para preto
+clear
+#printf '\e[30mBlack\n'
+
+sleep 2
+
+# Ler configuracoes
+source /var/www/html/videocall.conf
+
+# Inicializa led vermelho
+echo "18" > /sys/class/gpio/export
+echo "out" > /sys/class/gpio/gpio18/direction
+
+# Loop Infinito
+while true; do
+  echo "0" > /sys/class/gpio/gpio18/value
+  omxplayer --adev hdmi --win "0 0 $resX $resY" --blank --timeout 3 $origem
+  echo "1" > /sys/class/gpio/gpio18/value
+  sleep 0.4
+done
+
+exit
+---------------------------------------------------
+chmod +x /root/recebe_stream.sh
+
+- Arquivo de Configuração do Decoder (Raspberry)
+(/home/pi/videocall.conf)
+---------------------------------------------------
+resX=0
+resY=0
+
+# Descomente para usar a resolução do monitor na saída HDMI
+#resX=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/x([0-9]+)//g')
+#resY=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/^([0-9]+)x//g')
+
+# Descomente para forçar uma resolução
+#resX=1920
+#resY=1080
+
+# URL a capturar
+origem=rtmp://srv1.g2ptv.com.br/live/alta?key=abcd
+
+
+# Descobre a resolução do stream
+eval $(ffprobe -v error -of flat=s=_ -select_streams v:0 -show_entries stream=height,width $origem); streamX=${streams_stream_0_width}; streamY=${streams_stream_0_height}
+
+
+# Descobre resolução do monitor
+monX=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/x([0-9]+)$//g')
+monY=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/^([0-9]+)x//g')
+
+---------------------------------------------------
+
+
+- Para saber a resolução de um stream
+ eval $(ffprobe -v error -of flat=s=_ -select_streams v:0 -show_entries stream=height,width rtmp://srv1.g2ptv.com.br/live/baixa); resX=${streams_stream_0_width}; resY=${streams_stream_0_height} ;  echo $resX" x "$resY 
+
+.Outra forma de testar um stream
+ffprobe -hide_banner -show_format -pretty -print_format flat rtmp://srv3.zoeweb.tv:1935/z474-live/aovivo
+ 
+** Se necessário, setar a resolução de saída em /boot/config.txt PARA BATER COM O STREAM!
+
+
+- Para instalar o *cliente* NeoRouter
+wget http://download.neorouter.com/Downloads/NRFree/Update_2.3.1.4360/inabox/Raspbian/nrclient-2.3.1.4360-free-raspbian-armhf.deb
+dpkg -i nrclient-*.deb
+. incluir o comnando abaixo no arquivo /etc/rc.local, antes de "exit 0"
+ nrclientcmd -d "IP" -u decoder001 -p "SENHA" -register
+(para desinstalar: dpkg -r nrclient-*.deb)
+
+- Para instalar o *servidor* NeoRouter (em outra maquina com ip válido fixo)
+http://www.neorouter.com/wiki/index.php/NeoRouterWiki:ServerSetup#Install_NeoRouter_server_for_Linux
+wget http://download.neorouter.com/Downloads/NRFree/Update_2.3.1.4360/Linux/CentOS/nrserver-2.3.1.4360-free-centos-x86_64.rpm
+rpm -i nrserver-2.3.1.4360-free-centos-x86_64.rpm
+nrserver -showsettings
+IP : SENHA  (dominio)
+nrserver -dhcp 10.1.1.0 255.255.255.0
+nrserver -adduser serverbox password [admin|user]
+nrserver -adduser MAQUINA SENHA USER
+nrserver -adduser MAQUINA SENHA USER
+nrserver -showusers
+
+
+** Ultra baixa latência ?
+ffplay -fflags nobuffer -probesize 32 -i rtmp://10.0.0.160/live/Stream
+
+** Listar Fontes NDI: ffmpeg -f libndi_newtek -find_sources 1 -i dummy
+Reproduzir NDI: ffplay -f libndi_newtek -i "DEV-5.INTERNAL.M1STEREO.TV (NDI_SOURCE_NAME_1)"
+Reproduzir NDI via Muxer: ffmpeg -f libndi_newtek -i "DEV-5.INTERNAL.M1STEREO.TV (NDI_SOURCE_NAME_1)" -f matroska - | ffplay -fs -
+
+Reproduzir Stream Zoeweb: ffplay  -i "rtmp://srv9.zoeweb.tv:1935/zw969/stream" -rtmp_buffer 2000 -noautorotate -fast
+
+** 'Deep Lock' para Linux:
+https://www.youtube.com/watch?v=sSRpkaMlflM
+
+** Testar Gargalo:
+apt-get install linux-perf-4.9
+perf stat -a -- sleep 10
+An IPC (instruction per cycle < 1.0 likely means memory bound, and an IPC > 1.0 likely means instruction bound. 
+
+** Para 'teclar' usando a GPIO:
+https://raspberrypi.stackexchange.com/questions/23991/noob-here-how-can-i-rig-up-a-button-to-the-gpio-and-set-it-so-that-it-will-tri
+https://www.raspberrypi.org/forums/viewtopic.php?t=188941  ( https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/input-event-codes.h#L102 )
+http://blog.gegg.us/2017/01/setting-up-a-gpio-button-keyboard-on-a-raspberry-pi/
+
+** Mini LCD 3.5 e 1.8" touch na Raspberry
+http://ozzmaker.com/raspberrypi-tft/
+
+
+- Para Mostrar o Status do DECODER RTMP pelo SSH:
+---------------------------------------------------
+#!/bin/bash
+# /root/painel_decoder_ssh.sh
+
+clear
+
+# carrega configurações
+source /var/www/html/videocall.conf
+
+# Loop infinito
+while true; do
+  cpu_uso=$(top -b -n 2 -p 1 | fgrep "Cpu(s)" | tail -1 | awk -F'id,' -v prefix="$prefix" '{ split($1, vs, ","); v=vs[length(vs)]; sub("%", "", v); printf "%s%.1f%%\n",  prefix, 100 - v }')
+    if [ "$cpu_uso" = "0.0%" ]; then cpu_uso="0.3%"; fi
+  cpu_temp=$(/opt/vc/bin/vcgencmd measure_temp | sed s/temp=// | sed s/\..\'C$//)°C
+  rede_uso=$(ifstat -i eth0 -b 1.5 1 | tail -1 | awk '{print $1}' | cut -f 1 -d '.')
+  mem_uso=$(free -m | awk 'NR==2{printf "%.1f%%\n", $3*100/$2 }')
+  ip=$(hostname -I)
+  server=$(echo $origem | sed -e 's/?.*//')
+  clear
+  echo 'CPU:' $cpu_uso'_'$cpu_temp'  Mem:' $mem_uso
+  echo 'Lan:' $ip'  '$rede_uso' Kbps DN'
+  echo 'Servidor RTMP:' $server
+  echo
+  echo 'Monitor:' $monX'x'$monY
+  echo 'Stream:' $streamX'x'$streamY
+  if [ $resX = "0" ]; then 
+    echo 'Render: AUTO'
+  else
+    echo 'Render: '$resX'x'$resY
+  fi
+
+# Pesquisa a resolução do monitor
+  monX=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/x([0-9]+)$//g')
+  monY=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/^([0-9]+)x//g')
+
+# Pesquisa a resolução do stream
+  if [ -z $streamX ]; then
+    eval $(ffprobe -v quiet -of flat=s=_ -select_streams v:0 -show_entries stream=height,width $origem); streamX=${streams_stream_0_width}; streamY=${streams_stream_0_height} > /dev/null 2>&1
+  fi
+
+done
+---------------------------------------------------
+chmod +x /root/painel_decoder_ssh.sh
+
+- Apache na Raspberry (para editar as configurações via web), ou usar NGINX para tb ser RTMP server
+apt-get install apache2 -y
+mv /var/www/html/index.html /var/www/html/index_original.html
+apt-get install php5 -y
+nano /var/www/html/index.php e colar  <?php phpinfo(); ?>  (para testar o php em http://ip)
+cp /home/pi/videocall.conf /home/pi/videocall.conf.bak
+cp /home/pi/videocall.conf /var/www/html/videocall.conf
+/etc/init.d/apache2 start (jessie)
+systemctl start apache2.service (stretch)
+
+https://thiscouldbebetter.wordpress.com/2012/12/18/loading-editing-and-saving-a-text-file-in-html5-using-javascrip/
+
+- NGINX + RTMP + PHP
+apt-get install nginx install libnginx-mod-rtmp (só no Buster?)
+(ou compilar localmente - ver receita em stream server)
+
+
+- Instalar o Desktop Gráfico RDP se a instalação foi do Raspbian Lite
+apt-get install --no-install-recommends xserver-xorg
+apt-get install --no-install-recommends xinit
+apt-get install raspberrypi-ui-mods
+
+
+
+- Ler botões do mouse no bash e executar comandos
+apt-gte install gpm
+---------------------------------------------------------
+#!/bin/sh
+# /root/botoes_mouse.sh
+# This script listen to mouse events with the mev command using gpm.
+# http://positon.org/listen-to-mouse-events-in-linux-text-mode
+# To start it as a daemon use:
+# nohup /root/botoes_mouse.sh > /tmp/mpd_mouse.log 2>&1 &
+
+# start gpm if not already started
+gpm -m /dev/input/mice -t imps2
+
+# unset TERM variable, otherwise mev refuses to start when detecting xterm
+unset TERM
+
+# we use script to fake a tty for mev, otherwise it exits (note: mev logs errors in syslog)
+script -qc "mev -E" /dev/null </dev/null | grep --line-buffered -v "mouse-movement" | while read LINE
+do
+        EVENT=$(echo "$LINE" | cut -d' ' -f1 | cut -d'(' -f2)
+
+        if [ "$EVENT" = "down-mouse-1" ]
+        then
+                pkill omxplayer
+        elif [ "$EVENT" = "down-mouse-2" ]
+        then
+		python /home/pi/5110.py '' '' '' '' ''
+		echo "1" > /sys/class/gpio/gpio18/value
+		shutdown -h now
+        elif [ "$EVENT" = "down-mouse-3" ]
+        then
+                echo "0" > /sys/class/gpio/gpio4/value
+		python /home/pi/5110.py '' '' '' '' ''
+		reboot
+
+        fi
+done
+
+---------------------------------------------------------
+
+
+- LED vermelho de alarme - Raspberry
+led pequeno + resistor de 330 ohms
+negativo (chanfrado, menor) ligado no resistor e este no pino 6
+positivo ligado no pino 12 (GPIO 18)
+https://www.filipeflop.com/wp-content/uploads/2018/01/Circuito-RP-Led-1024x528.png
+
+Para iniciar a GPIO 18:
+echo "18" > /sys/class/gpio/export
+echo "out" > /sys/class/gpio/gpio18/direction
+echo "1" > /sys/class/gpio/gpio18/value  (acende)
+echo "0" > /sys/class/gpio/gpio18/value  (apaga)
+
+- Backlight do LCD 5110 (3,3 v na GPIO 04)
+Para iniciar a GPIO 04:
+echo "4" > /sys/class/gpio/export
+echo "out" > /sys/class/gpio/gpio4/direction
+echo "1" > /sys/class/gpio/gpio4/value  (acende)
+echo "0" > /sys/class/gpio/gpio4/value  (apaga)
+
+- Display Nokia 51110
+Ligação: https://www.algissalys.com/how-to/nokia-5110-lcd-on-raspberry-pi
+(backlight vai em +5vcc)
+apt-get install python-pip python-dev build-essential python-imaging git
+pip install RPi.GPIO
+nano /boot/config.txt  (descomentar a linha dtparam=spi=on)
+reboot
+Testar se está carregando o módulo com  lsmod | grep "spi_bcm*"
+cd /root
+git clone https://github.com/adafruit/Adafruit_Nokia_LCD.git
+cd ./Adafruit_Nokia_LCD
+python setup.py install
+cd ./examples
+python shapes.py
+
+
+- Arquivo que imprime no LCD (/home/pi/5110.py)
+------------------------------------------------------------------
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Copyright (c) 2014 Adafruit Industries
+# Author: Tony DiCola
+
+import time
+import sys
+
+import Adafruit_Nokia_LCD as LCD
+import Adafruit_GPIO.SPI as SPI
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
+
+# Raspberry Pi hardware SPI config:
+DC = 23
+RST = 24
+SPI_PORT = 0
+SPI_DEVICE = 0
+
+# Hardware SPI usage:
+disp = LCD.PCD8544(DC, RST, spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE, max_speed_hz=4000000))
+
+# Software SPI usage (defaults to bit-bang SPI interface):
+#disp = LCD.PCD8544(DC, RST, SCLK, DIN, CS)
+
+# Initialize library.
+disp.begin(contrast=60)
+
+# Clear display.
+disp.clear()
+disp.display()
+
+# Create blank image for drawing.
+# Make sure to create image with mode '1' for 1-bit color.
+image = Image.new('1', (LCD.LCDWIDTH, LCD.LCDHEIGHT))
+
+# Get drawing object to draw on image.
+draw = ImageDraw.Draw(image)
+
+# Draw a white filled box to clear the image.
+draw.rectangle((0,0,LCD.LCDWIDTH,LCD.LCDHEIGHT), outline=255, fill=255)
+
+# Load default font.
+font = ImageFont.load_default()
+
+# Alternatively load a TTF font.
+# Some nice fonts to try: http://www.dafont.com/bitmap.php
+# font = ImageFont.truetype('/root/beefd_5.ttf', 20)
+
+# Write some text.
+draw.text((0,0), sys.argv[1], font=font)
+draw.text((0,11), sys.argv[2], font=font)
+draw.text((0,22), sys.argv[3], font=font)
+
+# Define text and get total width.
+text = sys.argv[4]
+maxwidth, height = draw.textsize(text, font=font)
+
+# Set starting position.
+startpos = 83
+pos = startpos
+
+# Animate text
+count = len (sys.argv[4]) - 12
+while (count > 0):
+    # Clear image buffer.
+    draw.rectangle((0,36,83,47), outline=255, fill=255)
+    # Enumerate characters and draw them
+    x = pos
+    for i, c in enumerate(text):
+        # Stop drawing if off the right side of screen.
+        if x > 83:
+            break
+        # Calculate width but skip drawing if off the left side of screen.
+        if x < -10:
+            width, height = draw.textsize(c, font=font)
+            x += width
+            continue
+        # Y Position
+        y = 36
+        # Draw text.
+        draw.text((x, y), c, font=font, fill=0)
+        # Increment x position based on chacacter width.
+        width, height = draw.textsize(c, font=font)
+        x += width
+        # Draw the image buffer.
+        disp.image(image)
+        disp.display()
+        # Move position for next frame.
+        pos -= 2
+        # Start over if text has scrolled completely off left side of screen.
+        if pos < -maxwidth:
+            pos = startpos
+    # Pause briefly before drawing next frame.
+    time.sleep(0.18)
+    count = count - 1
+
+# Display image.
+disp.image(image)
+disp.display()
+------------------------------------------------------------------
+
+
+- Para Gerar os Textos que serão mostrados no LCD 510
+------------------------------------------------------------------
+#!/bin/bash
+# Gera Textos no LCD 5110
+#/root/painel_decoder_lcd.sh
+
+# Carrega configuracoes 
+source /var/www/html/videocall.conf
+
+# Inicializa e acende backlight do LCD
+echo "4" > /sys/class/gpio/export
+echo "out" > /sys/class/gpio/gpio4/direction
+echo "1" > /sys/class/gpio/gpio4/value
+
+# Loop Infinito
+while true; do
+  cpu_uso=$(top -b -n 1 -p 1 | fgrep "Cpu(s)" | tail -1 | awk -F'id,' -v prefix="$prefix" '{ split($1, vs, ","); v=vs[length(vs)]; sub("%", "", v); printf "%s%.1f%%\n",  prefix, 100 - v }')
+    if [ "$cpu_uso" = "0.0%" ]; then cpu_uso="0.3%"; fi
+  cpu_temp=$(/opt/vc/bin/vcgencmd measure_temp | sed s/temp=// | sed s/\..\'C$//)°C
+  rede_uso=$(ifstat -i eth0 -b 1.5 1 | tail -1 | awk '{print $1}' | cut -f 1 -d '.')
+# mem_uso=$(free -m | awk 'NR==2{printf "%.1f%%\n", $3*100/$2 }')
+  ip=$( hostname -I | cut -f 1 -d ' ')
+  server=$(echo rtmp://srv1.g2ptv.com.br/live/alta?key=abcd | sed -e 's/?.*//')
+  linha1='CPU:'$cpu_uso','$cpu_temp
+#  linha2='Mem:'$mem_uso
+  linha2='IP:'$ip
+  linha3=$rede_uso'.Kbps'
+  linha4=$server
+  python /home/pi/5110.py $linha1 $linha2 $linha3 $linha4
+
+
+  linha1='Vid:'$monX'x'$monY
+  linha2='Str:'$streamX'x'$streamY
+
+  if [ $resX = "0" ]; then 
+    linha3='Render:.AUTO'
+  else
+    linha3='Rend:'$resX'x'$resY
+  fi
+
+  linha4=$server
+  python /home/pi/5110.py $linha1 $linha2 $linha3 $linha4
+
+# Pesquisa a resolução do monitor
+  monX=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/x([0-9]+)$//g')
+  monY=$(fbset -s | grep "mode " | sed -e 's/mode //g;s/"//g' | sed -r 's/^([0-9]+)x//g')
+
+# Pesquisa a resolução do stream
+  if [ -z $streamX ]; then
+    eval $(ffprobe -v quiet -of flat=s=_ -select_streams v:0 -show_entries stream=height,width $origem); streamX=${streams_stream_0_width}; streamY=${streams_stream_0_height} > /dev/null 2>&1
+  fi
+done
+------------------------------------------------------------------
+
+
+- Página web para configurar o decoder (/var/www/html/config.php)
+
+<?php
+// set file to read
+$filename = "videocall.conf";
+  
+$newdata = $_POST['newd'];
+
+if ($newdata != '') {
+
+// open file 
+$fw = fopen($filename, 'w') or die('Could not open file!');
+
+// write to file
+// added stripslashes to $newdata
+$fb = fwrite($fw,stripslashes($newdata)) or die('Could not write 
+to file');
+
+// close file
+fclose($fw);
+}
+
+// open file
+  $fh = fopen($filename, "r") or die("Could not open file!");
+
+// read file contents
+  $data = fread($fh, filesize($filename)) or die("Could not read file!");
+
+// close file
+  fclose($fh);
+
+// print file contents
+ echo "<h3>Configuracoes do Decoder</h3>
+
+<form action='' method= 'post' >
+<textarea name='newd' cols='100%' rows='20'> $data </textarea>
+</br><center>
+<input type='submit' value='Gravar'>
+</center></form>";
+
+
+// open file
+  $fp = fopen("videocall.conf_padrao", "r") or die("Could not open file!");
+
+// read file contents
+  $padrao = fread($fp, filesize("videocall.conf_padrao")) or die("Could not read file!");
+
+echo "</br></br></br>
+<h4>Configuracoes de Fabrica (copie e cole no quadro acima)</h4>
+<textarea name='padr' cols='100%' rows='20'> $padrao </textarea>";
+
+?>
+------------------------------------------------------------------
+
+
+- rc.local do DECODER Raspberry
+Por um motivo não determinado, as vezes o arquivo ./root/.bash_login é corrompido no shutdown.
+Uma rotina que cria um novo foi incluída no rc.local, que roda antes do boot.
+
+#!/bin/sh -e
+# /etc/rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Make sure that the script will "exit 0" on success or any other
+# value on error.
+#
+# In order to enable or disable this script just change the execution
+# bits.
+#
+# By default this script does nothing.
+
+ 
+# Corrige arquivo /root/.bash_login corrompido no shutdown
+if [ ! -f /root/bash_login ]; then
+    cp /root/.bash_login_backup /root/.bash_login; chmod 770 /root/.bash_login
+fi
+
+exit 0
+------------------------------------------------------------------
+
+
+- Arquivo de backup .bash_login_backup
+#!/bin/bash
+#/root/.bash_login_backup
+
+alias ls='ls --color=auto'
+
+if [ $(who | grep -c 'root') = '1' ]; then
+
+# Muda letras para preto
+clear
+setterm --foreground black
+
+# Corrige \r no config se editado pela web
+sed -i 's/\r/ /g' /var/www/html/videocall.conf
+
+# Carrega mï¿½dulos
+/root/botoes_mouse.sh & > /dev/null 2>&1
+/root/painel_decoder_lcd.sh & > /dev/null 2>&1
+/root/recebe_stream.sh & > /dev/null 2>&1
+
+fi
+------------------------------------------------------------------
+
+
+.Todo o conteúdo de /var/www/html deve ter permissão 777
+.Corrigir permissões de execução em /root
+.Corrigir permissões de execução e dono (pi) em /home/pi
+
+
+** Capturar Youtube
+https://superuser.com/questions/680323/processing-youtube-video-in-ffmpeg
+
+** Saber a cidade de um IP
+curl --silent ipinfo.io/187.75.229.138 | grep region | sed 's/\"//g' | sed 's/,//' | sed 's/region: //'
+
+** Para iniciar um script e saber seu pid:
+my-app &
+echo $!
+ [1] 893
+ 
+numa screen...
+screen -d -m -S teste ping localhost & echo $!
+ 
+ou gravando o pid num arquivo texto...
+my-app & echo $! >>/tmp/my-app.pid
+ 
+ 
+** Para fechar uma screen basta dar kill no seu PID
+
+** Para saber o PID da screen 'test'
+screen -ls | grep 'stream' | sed 's/^[ \t]*//' | cut -f 1 -d '.'
+
+** Lista Atual de Parâmetros do FFMPEG:
+https://gist.github.com/tayvano/6e2d456a9897f55025e25035478a3a50
+
+** NGinx + HLS na Raspberry
+https://jobinbasani.com/2014/08/23/nginx-based-streaming-server-raspberry-pi/
+
+
+- Raspberry *Power Led* na GPIO 14
+https://www.raspberrypi.org/forums/viewtopic.php?t=117613
+
+
+- FAIL2BAN
+apt-get install fail2ban
+
+.Para saber o status:
+cat /etc/fail2ban/jail.conf | less
+cat /etc/fail2ban/jail.d/defaults-debian.conf
+fail2ban-client status
+fail2ban-client status sshd
+
+
+- Rotina para Limpar o Fail2Ban
+nano /root/clear_fail2ban.sh
+
+#!/bin/bash
+# /root/clear_fail2ban.sh
+#
+echo "Limpando fail2ban"
+dbfile=$(fail2ban-client get dbfile); fail2ban-client stop; echo $dbfile | tail -n 1 | cut -f 6 -d ' ' | xargs rm -rf
+
+#echo "Rocionando /var/log/auth.log"
+savelog -n -l -q -c 3 /var/log/auth.log
+touch /var/log/auth.log
+fail2ban-client start
+
+------------------------------------------------------------------
+chmod 754 /root/clear_fail2ban.sh
+
+
+** Sensor Touch
+TTP223
+
+------------------------------------------------------------------
+Vectorscope & Waveform
+
+Vectorscope:
+C:\Users\Renato>ffplay -i rtmp://177.94.226.105/live/baixa?key=abcd -vf "split[a][b];[a]waveform=e=3,split=3[c][d][e];[e]crop=in_w:20:0:235,lutyuv=v=180[low];[c]crop=in_w:16:0:0,lutyuv=y=val:v=180[high];[d]crop=in_w:220:0:16,lutyuv=v=110[mid] ; [b][high][mid][low]vstack=4"
+
+Waveform:
+(gráfico mostrando em o range de broadcast em verde (valores de y entre 16 e 235) e os fora desse envelope em vermelho):
+ffplay -i rtmp://177.94.226.105/live/baixa?key=abcd -vf "split[a][b];[a]waveform=e=3,split=3[c][d][e];[e]crop=in_w:20:0:235,lutyuv=v=180[low];[c]crop=in_w:16:0:0,lutyuv=y=val:v=180[high];[d]crop=in_w:220:0:16,lutyuv=v=110[mid] ; [b][high][mid][low]vstack=4"
+------------------------------------------------------------------
