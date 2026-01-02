@@ -1,0 +1,372 @@
+﻿ ﻿** INSTALAÇÃO **
+
+- Instalar o SO (Debian ou Raspian)
+.criar um arquivo vazio chamado 'ssh' na partição boot (no windows)
+Usei a instalação com Pixel pois na Lite tive muitos problemas com o FrameBuffer/SDL
+primeiro login: pi / raspberry
+sudo -i
+Editar /etc/ssh/sshd_config e mudar a linha "#PermitRootLogin without-password" para "PermitRootLogin yes"
+/etc/init.d/ssh restart
+passwd root (root / g2p88)
+rm /root/.bashrc
+cp /home/pi/.bashrc /root/.bashrc
+passwd pi (pi / g2p88)
+
+- raspi-config (SSH, 256 MB VideoRAM)
+
+- Editar o arquivo o /etc/default/keyboard para:
+XKBMODEL="abnt2"
+XKBLAYOUT="br"
+XKBVARIANT=""
+XKBOPTIONS="lv3:ralt_switch,compose:rwin"
+
+- Reiniciar o serviço do teclado: 
+/etc/init.d/kbd restart  (jessie)
+service keyboard-setup restart  (stretch)
+
+- Editar o arquivo /etc/kbd/config para:
+BLANK_TIME=0
+BLANK_DPMS=off
+POWERDOWN_TIME=0
+(se estiver usando o pixel, ver http://www.etcwiki.org/wiki/Disable_screensaver_and_screen_blanking_Raspberry_Pi)
+
+- Para boot com menos mensagens
+.Editar /boot/cmdline.txt (ou adicionar) para ter console=tty3 quiet disable_splash=1 loglevel=0 logo.nologo vt.global_cursor_default=0
+.remover "console=serial0,115200"
+.apagar o conteúdo de /etc/issue
+.touch ~/.hushlogin
+apt-get unclutter  (esconde o cursor do mouse - outra opção em  https://raspberrypi.stackexchange.com/questions/10209/how-to-disable-mouse-cursor-on-lxde)
+
+** Para boot silencioso:
+https://www.raspberrypi.org/forums/viewtopic.php?f=91&t=181209
+
+
+https://raspberrypi.stackexchange.com/questions/59310/remove-boot-messages-all-text-in-jessie
+$>nano /etc/systemd/system/autologin\@.service
+de
+ExecStart=-/sbin/agetty --autologin pi --noclear %I $TERM
+para
+ExecStart=-/sbin/agetty --skip-login --noclear --noissue --login-options "-f pi" %I $TERM
+
+$>nano /etc/pam.d/login
+de
+session    optional   pam_exec.so type=open_session stdout /bin/uname -snrvm
+para 
+session    optional   pam_exec.so type=open_session stdout
+
+$>touch .hushlogin
+
+
+- Root CLI AutoLogin no Stretch:
+#nano /etc/systemd/logind.conf e mudar #NAutoVTs=6 para NAutoVTs=1
+#systemctl edit getty@tty1 (isso irá criar /etc/systemd/system/getty@tty1.service.d/override.conf) e colar:
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I 38400 linux
+#systemctl enable getty@tty1.service
+#reboot
+
+
+- editar o arquivo /etc/rc.local e incluir a linha abaixo **antes de 'exit 0'**:
+printf "[  OK  ] Setting CPU Governor to Performance"
+echo ''
+echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+
+-Adicionar as linhas abaixo no arquivo /etc/sysctl.conf:
+#disable ipv6
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+
+- Executar o comando como root:
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+(reiniciar)
+
+- Editar /etc/apt/sources.list para que fique assim:
+deb http://archive.raspbian.org/raspbian jessie main contrib non-free rpi
+deb-src http://archive.raspbian.org/raspbian jessie main contrib non-free rpi
+# para instalar o ffmpeg e a libzmq no Debian
+deb http://www.deb-multimedia.org jessie main non-free
+deb-src http://www.deb-multimedia.org jessie main non-free
+
+- Permitir que deb-multimedia seja confiável e refazer a base de dados:
+apt-get install deb-multimedia-keyring
+apt-get update
+
+- Deixar os pacotes em dia
+apt-get upgrade
+
+- Acertar timezone
+dpkg-reconfigure tzdata
+
+- Confirmar se o serviço tmesyncd está ok:
+timedatectl status
+
+Se quiser trocá-lo pelo ntpd e servir horário para a rede:
+systemctl stop systemd-timesyncd
+systemctl disable systemd-timesyncd
+apt-get install ntpq
+nano /etc/ntpq.conf  (comentar as entradas do pool e acrwescentar em servers:)
+  server a.ntp.br iburst
+  server b.ntp.br iburst
+​/etc/init.d/ntp stop
+​/etc/init.d/ntp start
+
+
+- Adicionar em /etc/modules  (para captura EasyCap)
+usbtv
+
+- Instalar ALSA e um player de mp3  ;-)
+apt-get install alsa-base alsa-oss alsa-utils alsa-tools mpg123
+(para consultas)
+http://karuppuswamy.com/wordpress/2015/08/15/configuring-alsa-audio-output-on-analog-and-hdmi-of-raspberry-pi/
+http://wiki.linuxaudio.org/wiki/raspberrypi
+
+- Instalar ferramentas e bibliotecas:
+apt-get install git screen build-essential libmp3lame-dev libvorbis-dev libtheora-dev  libspeex-dev yasm pkg-config libfaac-dev libopenjpeg-dev libx264-dev libzmq-dev libsdl1.2-dev libsdl2-dev libavdevice-dev libfdk-aac-dev raspberrypi-kernel-headers libtool
+libavfilter-dev libavdevice-dev
+
+(testando...) apt-get install libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile1-dev libudev-dev libasound2-dev libjpeg-dev libtiff5-dev libwebp-dev automake
+
+wget http://www.libsdl.org/release/SDL-1.2.15.tar.gz
+tar xzvf SDL-1.2.15.tar.gz
+cd SDL-1.2.15
+./configure
+make -j2 
+make install
+cd test
+./configure
+make
+
+wget http://www.libsdl.org/release/SDL2-2.0.5.tar.gz
+tar xzvf SDL2-2.0.5.tar.gz
+cd SDL2-2.0.5 && mkdir build
+./configure --host=armv7l-raspberry-linux-gnueabihf --disable-pulseaudio --disable-esd --disable-video-mir --disable-video-wayland --disable-video-x11 --disable-video-opengl
+make -j4 
+make install
+
+- Instalar biblioteca libzmq
+http://zeromq.org/area:download  (POSIX Tarball)
+Seguir instruções em INSTALL (./configure > make -j2 > make install )
+(ou)
+https://github.com/MrYsLab/xideco/wiki/Installing-ZeroMQ-on-Linux
+
+wget https://github.com/zeromq/libzmq/releases/download/v4.2.1/zeromq-4.2.1.tar.gz
+tar xzvf zeromq-4.2.1.tar.gz
+cd zeromq-4.2.1
+./configure
+make -j4
+make install
+
+- Incluir em /etc/ld.so.conf
+/usr/lib
+/usr/local/lib
+executar ldconfig
+
+- Instalar FFMpeg
+git clone git://source.ffmpeg.org/ffmpeg.git (git oficial)
+cd ffmpeg
+./configure --enable-gpl --enable-postproc --enable-swscale --enable-avfilter --enable-libmp3lame --enable-libvorbis --enable-libtheora --enable-libx264 --enable-libspeex --enable-shared --enable-pthreads --enable-libopenjpeg --enable-nonfree --enable-ffplay --enable-libzmq --enable-libfreetype --enable-libfdk-aac --enable-mmal --enable-omx --enable-omx-rpi
+make -j4   (se o make der erros de arquivo truncado, corrigir as dependências, apagar todo o diretório e recomeçar)
+make install
+make tools/zmqsend
+cp ./tools/zmqsend /usr/local/bin/ 
+make clean
+
+- Para instalar o cliente NeoRouter
+wget  http://download.neorouter.com/Downloads/NRFree/Update_2.3.1.4360/inabox/Raspbian/nrclient-2.3.1.4360-free-raspbian-armhf.deb
+dpkg -i nrclient-*.deb
+. incluir o comnando abaixo no arquivo /etc/rc.local, antes de "exit 0"
+ nrclientcmd -d "158.69.221.168" -u rasp1 -p g2p@88 -register
+(para desinstalar: dpkg -r nrclient-*.deb)
+
+- Para rodar algo após o auto-login na interface gráfica  (não funcionou com o login automático...)
+.setar o autologin com raspi-config
+. logado como usuário, comandar 'crontab -e' e incluir:
+@reboot /patch/script
+https://raspberrypi.stackexchange.com/questions/44169/run-something-after-login
+
+- Instalar o sshfs  (como root)
+apt-get install sshfs
+.Criar o diretório que será visto por sshfs
+mkdir /mnt/server
+sshfs -o allow_other,cache=no,reconnect,ServerAliveInterval=15,uid=rtv001,gid=1000 rtv001@10.0.3.95:/home/rtv001 /mnt/server
+(para desmontar - umount /mnt/server)
+.Habilitar o SSH sem senha
+ssh-keygen -t rsa 
+ssh-copy-id -i /root/.ssh/id_rsa.pub root@ip_do_servidor
+
+- Gerar os usuários e grupo (1000 - rtv)
+groupadd -g 1000 rtv
+adduser rtv001
+usermod -g rtv rtv001
+cat /etc/passwd (para saber o UID)
+
+- Em /boot/config.txt setar a resolução de saída PARA BATER COM O STREAM! ...
+. descomentando as linhas:
+framebuffer_width=1280
+framebuffer_height=720
+. alterando as linhas:
+# uncomment to force a specific HDMI mode (this will force VGA)
+# https://www.raspberrypi.org/forums/viewtopic.php?t=5851
+hdmi_group=1
+hdmi_mode=4  # HDMI_CEA_720p60
+#hdmi_mode=62  # HDMI_CEA_720p30
+
+
+- Para rodar um script após o login no shell
+criar o arquivo ~/.bash_login e colocar o script dentro
+(não tive sucesso com o ambinete gráfico: ou eu usava o ~/.xsession ou eu consegui o login automático)
+#!/bin/sh
+setterm --blank 0 --powerdown 0 --powersave off
+amixer set PCM 93%
+unclutter -display :0 -noevents -grab &
+clear
+echo ' '
+echo ' '
+echo ' CARREGANDO STREAM'
+sleep 10
+# Loop Infinito
+while true; do
+  clear
+# ffplay -i "rtmp://srv3.zoeweb.tv:1935/z474-live/aovivo" -rtmp_buffer 2000 -noautorotate -fast -fs
+  omxplayer -o hdmi  --win "0 0 854 480" --blank rtmp://srv9.zoeweb.tv:1935/zw969/stream
+  clear
+done
+
+
+** EXEMPLOS **
+
+- Reproduzir um stream rtmp
+ffplay [-vcodec h264_mmal] -i "rtmp://srv3.zoeweb.tv:1935/z474-live/aovivo" -fs
+
+- Teste Colorbar
+ffmpeg -f lavfi -i testsrc=duration=10:size=640x380:rate=30 -f matroska - | ffplay -
+
+- Receber um stream, fazer overlay e reproduzir em tempo real e em full screen)
+ffmpeg -hide_banner -loglevel fatal -i "rtmp://srv3.zoeweb.tv:1935/z474-live/aovivo" -y -vf drawtext="fontfile=hp_impact.ttf:text='091 17 7878 1234'':x=153:y=379:fontcolor=white:fontsize=39:bordercolor=black:borderw=2:boxcolor=0xa30003:box=1:boxborderw=5" -f matroska - | ffplay -fs -
+
+(em windows)
+ffmpeg -hide_banner -i Angry720px264.mp4 -y -vf drawtext="fontfile=hp_impact.ttf:text='091 17 7878 1234'':x=153:y=379:fontcolor=white:fontsize=39:bordercolor=black:borderw=2:boxcolor=0xa30003:box=1:boxborderw=5" -codec:v rawvideo -f matroska - | ffplay - -fs
+
+- Capturar a webcam do Lenovo Z470 (com um baita atraso!)
+ffmpeg -f dshow -i video="Lenovo EasyCamera" -f matroska -  | ffplay -
+
+- Listar os dispositivos suportados
+ffmpeg -list_devices true -f dshow -i dummy
+
+- Overlay de um logo e reproduzir em tempo real
+ffmpeg -hide_banner -loglevel fatal -i pouso_longo.mp4 -i logo.png -filter_complex "overlay=(W-w)/2:(H-h)/2" -codec:a copy -f matroska -  | ffplay -
+
+- Uso do zmq no ffmpeg:
+... -filter_complex 'zmq=bind_address=tcp\\\://127.0.0.1\\\:5557,drawtext=text=...
+
+- Uso do zmq no bash
+Exemplos  (não pode usar '\', '/' e ':' !!)
+(criar fonte com espaço alternativo)
+echo Parsed_drawtext_1 reinit text=CC | zmqsend -b tcp://127.0.0.1:5557
+echo Parsed_drawtext_1 reinit x=20 | zmqsend -b tcp://127.0.0.1:5557
+echo Parsed_drawtext_1 reinit text=10:fontsize=10 | zmqsend -b tcp://127.0.0.1:5557
+
+- Uso de named pipes:
+mkfifo pipe
+ls -l > pipe  (em um shell)
+and in another shell type:
+cat < pipe
+
+
+** COMANDOS QUE RESULTARAM EM MENOR CARGA DE PROCESSAMENTO **
+
+ffmpeg -i ./pousolongo.mp4 -codec:v copy -f mpegts - | ffplay -   (som ok, video ok, baixo processamento)
+
+ffmpeg -hide_banner -i pousolongo.mp4 -y -vf drawtext="fontfile=hp_impact.ttf:text='091 17 7878 1234'':x=153:y=379:fontcolor=white:fontsize=39:bordercolor=black:borderw=2:boxcolor=0xa30003:box=1:boxborderw=5" -codec:v rawvideo -f matroska - | ffplay -  (Windows, som ok, video ok, **banner**,  baixo processamento c/ alto trafego no barramento)
+
+ffmpeg -hide_banner -stream_loop -1 -i ./pouso.mpeg -y -vf drawtext="text='TESTE':fontfile=./hp_impact.ttf:x=53:y=79:fontcolor=white:fontsize=20:bordercolor=black:borderw=2:boxcolor=0xa30003:box=1:boxborderw=5" -codec:v rawvideo -f matroska - | ffplay - (Linux, som ok, video ok, **banner**,  baixo processamento c/ alto trafego no barramento - video em loop)
+
+ffmpeg -hide_banner -i ./pousolongo.mp4 -codec:v copy -codec:a aac -b:a 64k -ar 44100 -f matroska - | ffplay -   (som ok, video ok, baixo processamento apesar de usar aac)
+
+
+
+** FONTES DE CONSULTA **
+
+** Colocar e Tirar o Overlay quando necess�rio
+http://ffmpeg.org/ffmpeg-filters.html#zmq_002c-azmq  <--  !!
+http://zeromq.org/docs:source-git
+https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
+https://www.linkedin.com/pulse/using-zeromq-video-transport-protocol-chris-kennedy
+http://zeromq.org/intro:read-the-manual
+
+** Detectar se um frame � igual a uma figura
+http://superuser.com/questions/1036449/detect-color-bars-ffmpeg/1036478#1036478
+https://learn.adafruit.com/fft-fun-with-fourier-transforms/tone-input
+
+** Gerar thumbnails a cada período 
+ffmpeg -i VIDEO.EXTENSION -f image2 -ss 2 -r 1 IMAGENAME-%05d.png
+
+** Sincronizar as RTVs via SSHFs e Cron (ou ...
+https://www.digitalocean.com/community/tutorials/how-to-use-sshfs-to-mount-remote-file-systems-over-ssh 
+https://ubuntuforums.org/showthread.php?t=1961204
+https://ubuntuforums.org/showthread.php?t=135113   (sshfs sem senha)
+https://www.vivaolinux.com.br/artigo/Conexoes-SSH-sem-senha-facil-e-descomplicado
+http://www.tecmint.com/execute-commands-on-multiple-linux-servers-using-pssh/  (tem de declarar o UID !)
+
+** Rodar um comando quando um arquivo ou diretório é alterado
+http://stackoverflow.com/questions/4060212/in-linux-how-do-i-run-a-shell-script-when-a-file-or-directory-changes    (inotify-tools)
+http://entrproject.org/   (entr)
+https://github.com/pmorch/monitorfiles  (funciona em sshfs)
+while inotifywait -e close_write ./comando; do ./comando; done  (não funciona em um fs remoto)
+
+** Monitorar o funcionamnto 
+http://stackoverflow.com/questions/696839/how-do-i-write-a-bash-script-to-restart-a-process-if-it-dies
+
+** Para saber a resolução nativa do monitor hdmi:
+fbset -s (tamanho framebuffer) e   tvservice -s  (hardware hdmi)
+
+
+** EM EXPERIMENTO **
+
+ffmpeg -hide_banner -re -y -stream_loop -1 -i ./pousolongo.mp4 -filter_complex 'zmq=bind_address=tcp\\\://127.0.0.1\\\:5557,drawtext=text=TESTE2:fontfile=./hp_impact.ttf:x=53:y=79:fontcolor=white:fontsize=20:bordercolor=black:borderw=2:boxcolor=0xa30003:box=1:boxborderw=5' -codec:v rawvideo -f matroska - | ffplay - 
+
+720x480 (video composto em proporção 16:9)
+
+ssh-keygen -A -t rsa 
+ssh-copy-id -i /root/.ssh/id_rsa.pub root@ip_do_servidor
+umount /mnt/server
+sshfs -o allow_other,cache=no,ServerAliveInterval=15,uid=1000,gid=1000,identityfile=/root/.ssh/id_rsa root@10.0.3.95:/root /mnt/server
+./monitorfiles -p 0.5 -c /mnt/server/comando /mnt/server/comando
+
+-hwaccel (somente h.264 baseline)
+
+muxers:
+matroska
+smoothstreaming
+mpeg2video
+mpeg2vob
+rtp_mpegts
+
+
+mplayer -fps30 -tv driver=v4l2:width=640:height=480:device=/dev/video0 tv:// -vo sdl
+mplayer tv:// -tv driver=v4l2:norm=PAL:input=0:amode=0:width=720:height=480:outfmt=yuy2:device=/dev/video0:fps=30  -vo sdl:driver=fbcom
+sdhci-bcm2708.sync_after_dma=0   (em /boot/cmdline.txt)
+(problema com a alimentação na USB??)
+
+
+https://unix.stackexchange.com/questions/8056/disable-screen-blanking-on-text-console
+    Prevent screen from turning off (in console)
+    $ setterm -blank 0 -powerdown 0
+
+    Alternatively you can disable console blanking permanently using the following command:
+    # echo -ne "\033[9;0]" >> /etc/issue
+
+- Para acompanhar o processamento
+watch -n 1 "/opt/vc/bin/vcgencmd measure_temp ; cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+top -bn 2 | grep -F '%Cpu' | tail -n 4 | gawk '{print $2 $3}' | tr -s '\n\:\,[:alpha:]' ' '
+
+- Para acompanhar o processo:
+ ps a -j | grep ffplay | grep Sl  (para ver se está dormente)
+ pstree -a -G pi
+
+ 
+
+
+ 
